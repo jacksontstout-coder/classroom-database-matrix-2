@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const app = express();
 app.use(cors());
 
-// 1. DYNAMIC DATA ROUTE: Intercepts, modifies, and streams web traffic securely
+// 1. ADVANCED INTERCEPTION TUNNEL: Processes pages, scripts, forms, and background requests
 app.get('/service', async (req, res) => {
     let targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send("No target site URL specified.");
@@ -22,7 +22,7 @@ app.get('/service', async (req, res) => {
             method: 'GET',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept': '*/*',
                 'Accept-Language': 'en-US,en;q=0.5'
             }
         };
@@ -30,7 +30,7 @@ app.get('/service', async (req, res) => {
         const response = await fetch(targetUrl, options);
         let contentType = response.headers.get('content-type') || '';
 
-        // Pass binary streaming assets (videos, scripts, styles, graphics) straight through
+        // Pass binary streaming assets (videos for dulo.tv, live scripts, styling fonts, images) straight through
         if (!contentType.includes('text/html')) {
             const dataBuffer = await response.buffer();
             res.setHeader('Content-Type', contentType);
@@ -38,24 +38,52 @@ app.get('/service', async (req, res) => {
         }
 
         let htmlContent = await response.text();
-
-        // REWRITING TRACKS: Intercept paths so links don't break out of the tab frame
         const proxyBase = `${req.protocol}://${req.get('host')}/service?url=`;
+
+        // MASTER PATH REWRITER: Translates all relative and absolute web structures to stay bound to your proxy
         htmlContent = htmlContent.replace(/(href|src|action)="\/([^"]*)"/g, `$1="${proxyBase}${encodeURIComponent(urlObj.origin + '/')}$2"`);
 
-        // INJECTION MASK: Inject anti-redirection code blocks to paralyze frame breakouts
-        const antiBreakoutScript = `<head><script>
+        // INJECTION MATRIX: Hooks directly into the iframe's background data lanes to force Enter key submission routing
+        const globalInterceptionScript = `<head><script>
             (function() {
                 try {
+                    // Paralyze frame breakout attempts to ensure top URL bar stays permanently frozen
                     Object.defineProperty(window, 'top', { value: window, configurable: false, writable: false });
                     Object.defineProperty(window, 'parent', { value: window, configurable: false, writable: false });
+
+                    // 1. CATCH FORM SUBMISSIONS (Hitting Enter): Intercepts the submit action and forces it through the proxy
+                    window.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const form = e.target;
+                        let actionUrl = form.action || window.location.href;
+                        
+                        // Collect form search data inputs
+                        const formData = new FormData(form);
+                        const params = new URLSearchParams(formData);
+                        
+                        if (params.toString()) {
+                            actionUrl += (actionUrl.includes('?') ? '&' : '?') + params.toString();
+                        }
+
+                        window.location.href = "${proxyBase}" + encodeURIComponent(actionUrl);
+                    }, true);
+
+                    // 2. CATCH BACKGROUND JAVASCRIPT FETCH: Forces Google's internal lookups to run via your backend tunnel
+                    const originalFetch = window.fetch;
+                    window.fetch = function(input, init) {
+                        let url = typeof input === 'string' ? input : input.url;
+                        if (url.startsWith('/') || !url.startsWith(window.location.origin)) {
+                            const absoluteUrl = new URL(url, "${urlObj.origin}").href;
+                            url = "${proxyBase}" + encodeURIComponent(absoluteUrl);
+                        }
+                        return originalFetch(url, init);
+                    };
                 } catch(e) {}
             })();
-        <\/script>`;
+        <\/script><base href="${urlObj.origin}/">`;
 
-        htmlContent = htmlContent.replace(/<head>/i, antiBreakoutScript);
-
-        // Remove firewalls and security locks on the server container layer
+        // Inject our master interceptor layer directly at the start of the document head
+        htmlContent = htmlContent.replace(/<head>/i, globalInterceptionScript);
         htmlContent = htmlContent.replace(/content-security-policy/gi, 'disabled-csp');
         htmlContent = htmlContent.replace(/x-frame-options/gi, 'disabled-xfo');
 
@@ -66,16 +94,14 @@ app.get('/service', async (req, res) => {
         res.send(htmlContent);
 
     } catch (err) {
-        res.status(500).send(`<h3>Proxy Server Connection Fault:</h3><p>${err.message}</p>`);
+        res.status(500).send(`<h3>Proxy Server Pipeline Error:</h3><p>${err.message}</p>`);
     }
 });
 
-// 2. FRONTEND VIEW CONTROL: Serves your authentic student dashboard interface layout file
+// Serve your authentic student dashboard interface layout file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.use(express.static(__dirname));
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Path-Rewriting Gateway operating live on port ${PORT}`));
+app.listen(PORT, () => console.log(`Full-Access Search Engine operating live on port ${PORT}`));
