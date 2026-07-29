@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+
+// Dynamically handle node-fetch importing regardless of the system runtime version
 const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
 const app = express().use(cors());
 
+// 1. INVISIBLE TUNNEL GATEWAY: Processes pages, links, and background queries
 app.get('/gateway-tunnel', async (req, res) => {
     let target = req.query.url;
     if (!target) return res.status(400).send("No target site specified.");
@@ -40,9 +43,12 @@ app.get('/gateway-tunnel', async (req, res) => {
     } catch (err) { res.status(500).send(`Error: ${err.message}`); }
 });
 
+// 2. SELF-CONTAINED INTERFACE GATE: Serves your entire classroom dashboard out of system string memory
 app.get('/', (req, res) => {
     const mask = req.query.assignment || '';
     const search = req.query.q || '';
+    
+    // Send the layout directly out of a secure string block to fix the "not found" crash
     res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Workspace Portal</title><style>
         body,html{margin:0;padding:0;width:100%;height:100%;font-family:sans-serif;background:#f4f6f9;color:#1e293b;overflow:hidden;}
         .container{display:flex;min-height:100vh;}
@@ -57,7 +63,7 @@ app.get('/', (req, res) => {
         iframe{width:100%;height:100%;border:none;}
         #box{margin-top:20px;padding:15px;background:#f0f7ff;border:1px solid #bae7ff;border-radius:8px;display:none;word-break:break-all;}
     </style></head><body>
-        <div class="panel"><iframe src="${search?'/gateway-tunnel?mask='+encodeURIComponent(mask)+'&url='+encodeURIComponent(search):''}" sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"></iframe></div>
+        <div class="panel" id="panel"><iframe id="proxyIframe" src="${search?'/gateway-tunnel?mask='+encodeURIComponent(mask)+'&url='+encodeURIComponent(search):''}" sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"></iframe></div>
         <div class="container"><div class="sidebar"><div class="logo">CampusWorkspace</div><div>Assignment Core</div></div>
         <div class="main"><div class="card"><h3>Active Session: ${mask.toUpperCase() || 'AWAITING INITIALIZATION'}</h3></div>
         <div class="card"><h3>Research Engine Tunnel</h3><input type="text" id="inp" placeholder="Enter target site..."><button id="sBtn">Execute Pipeline</button></div>
@@ -75,10 +81,11 @@ app.get('/', (req, res) => {
             document.getElementById('cBtn').onclick=function(){
                 const b=document.getElementById('box'); b.style.display="block";
                 const n=window.location.origin+'/?assignment=workbook-'+Math.floor(1000+Math.random()*9000);
-                b.innerHTML='<strong>Mirror Cloned:</strong><br><br><a href="'+n+'" target="_blank" style="color:#0070f3;text-decoration:none;">'+n+'</a>';
+                b.innerHTML='<strong>Mirror Cloned:</strong><br><br><a href="' + n + '" target="_self" style="color:#0070f3;text-decoration:none;">' + n + '</a>';
             };
         </script>
     </body></html>`);
 });
 
-app.listen(process.env.PORT || 10000);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("System initialization completed successfully."));
