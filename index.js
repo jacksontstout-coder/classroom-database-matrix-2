@@ -1,107 +1,84 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-const app = express();
-app.use(cors());
+const app = express().use(cors());
 
-// 1. ADVANCED INTERCEPTION TUNNEL: Processes pages, scripts, forms, and background requests
-app.get('/service', async (req, res) => {
-    let targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("No target site URL specified.");
-
+app.get('/gateway-tunnel', async (req, res) => {
+    let target = req.query.url;
+    if (!target) return res.status(400).send("No target site specified.");
     try {
-        targetUrl = decodeURIComponent(targetUrl);
-        if (!targetUrl.startsWith('http')) {
-            targetUrl = 'https://' + targetUrl;
-        }
-
-        const urlObj = new URL(targetUrl);
-        const options = {
-            method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.5'
-            }
-        };
-
-        const response = await fetch(targetUrl, options);
+        target = decodeURIComponent(target);
+        if (!target.startsWith('http')) target = 'https://' + target;
+        const u = new URL(target);
+        const response = await fetch(target, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         let contentType = response.headers.get('content-type') || '';
 
-        // Pass binary streaming assets (videos for dulo.tv, live scripts, styling fonts, images) straight through
         if (!contentType.includes('text/html')) {
-            const dataBuffer = await response.buffer();
-            res.setHeader('Content-Type', contentType);
-            return res.send(dataBuffer);
+            return res.send(await response.buffer());
         }
 
-        let htmlContent = await response.text();
-        const proxyBase = `${req.protocol}://${req.get('host')}/service?url=`;
+        let html = await response.text();
+        const base = `${req.protocol}://${req.get('host')}/gateway-tunnel?mask=${req.query.mask || ''}&url=`;
+        html = html.replace(/(href|src|action)="\/([^"]*)"/g, `$1="${base}${encodeURIComponent(u.origin + '/')}$2"`);
 
-        // MASTER PATH REWRITER: Translates all relative and absolute web structures to stay bound to your proxy
-        htmlContent = htmlContent.replace(/(href|src|action)="\/([^"]*)"/g, `$1="${proxyBase}${encodeURIComponent(urlObj.origin + '/')}$2"`);
-
-        // INJECTION MATRIX: Hooks directly into the iframe's background data lanes to force Enter key submission routing
-        const globalInterceptionScript = `<head><script>
+        const inject = `<head><base href="${u.origin}/"><script>
             (function() {
                 try {
-                    // Paralyze frame breakout attempts to ensure top URL bar stays permanently frozen
-                    Object.defineProperty(window, 'top', { value: window, configurable: false, writable: false });
-                    Object.defineProperty(window, 'parent', { value: window, configurable: false, writable: false });
-
-                    // 1. CATCH FORM SUBMISSIONS (Hitting Enter): Intercepts the submit action and forces it through the proxy
+                    Object.defineProperty(window, 'top', { value: window, configurable: false });
+                    Object.defineProperty(window, 'parent', { value: window, configurable: false });
                     window.addEventListener('submit', function(e) {
                         e.preventDefault();
-                        const form = e.target;
-                        let actionUrl = form.action || window.location.href;
-                        
-                        // Collect form search data inputs
-                        const formData = new FormData(form);
-                        const params = new URLSearchParams(formData);
-                        
-                        if (params.toString()) {
-                            actionUrl += (actionUrl.includes('?') ? '&' : '?') + params.toString();
-                        }
-
-                        window.location.href = "${proxyBase}" + encodeURIComponent(actionUrl);
+                        if (e.target.action) window.location.href = "${base}" + encodeURIComponent(e.target.action);
                     }, true);
-
-                    // 2. CATCH BACKGROUND JAVASCRIPT FETCH: Forces Google's internal lookups to run via your backend tunnel
-                    const originalFetch = window.fetch;
-                    window.fetch = function(input, init) {
-                        let url = typeof input === 'string' ? input : input.url;
-                        if (url.startsWith('/') || !url.startsWith(window.location.origin)) {
-                            const absoluteUrl = new URL(url, "${urlObj.origin}").href;
-                            url = "${proxyBase}" + encodeURIComponent(absoluteUrl);
-                        }
-                        return originalFetch(url, init);
-                    };
-                } catch(e) {}
+                } catch(err) {}
             })();
-        <\/script><base href="${urlObj.origin}/">`;
-
-        // Inject our master interceptor layer directly at the start of the document head
-        htmlContent = htmlContent.replace(/<head>/i, globalInterceptionScript);
-        htmlContent = htmlContent.replace(/content-security-policy/gi, 'disabled-csp');
-        htmlContent = htmlContent.replace(/x-frame-options/gi, 'disabled-xfo');
+        <\/script>`;
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-        res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-        
-        res.send(htmlContent);
-
-    } catch (err) {
-        res.status(500).send(`<h3>Proxy Server Pipeline Error:</h3><p>${err.message}</p>`);
-    }
+        res.send(html.replace(/<head>/i, inject).replace(/content-security-policy/gi, 'disabled-csp').replace(/x-frame-options/gi, 'disabled-xfo'));
+    } catch (err) { res.status(500).send(`Error: ${err.message}`); }
 });
 
-// Serve your authentic student dashboard interface layout file
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const mask = req.query.assignment || '';
+    const search = req.query.q || '';
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Workspace Portal</title><style>
+        body,html{margin:0;padding:0;width:100%;height:100%;font-family:sans-serif;background:#f4f6f9;color:#1e293b;overflow:hidden;}
+        .container{display:flex;min-height:100vh;}
+        .sidebar{width:240px;background:#2c3e50;color:white;padding:20px;box-sizing:border-box;}
+        .logo{font-size:18px;font-weight:bold;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:20px;}
+        .main{flex:1;padding:40px;box-sizing:border-box;display:flex;flex-direction:column;gap:25px;}
+        .card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:25px;}
+        input{width:100%;padding:14px;font-size:15px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:20px;box-sizing:border-box;}
+        button{display:block;padding:14px;font-size:15px;background:#0070f3;color:white;border:none;border-radius:8px;cursor:pointer;width:100%;font-weight:bold;}
+        .clone-btn{background:#1e293b;margin-top:10px;}
+        .panel{display:${search?'block':'none'};width:100%;height:100%;position:fixed;top:0;left:0;z-index:1000;background:#fff;}
+        iframe{width:100%;height:100%;border:none;}
+        #box{margin-top:20px;padding:15px;background:#f0f7ff;border:1px solid #bae7ff;border-radius:8px;display:none;word-break:break-all;}
+    </style></head><body>
+        <div class="panel"><iframe src="${search?'/gateway-tunnel?mask='+encodeURIComponent(mask)+'&url='+encodeURIComponent(search):''}" sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"></iframe></div>
+        <div class="container"><div class="sidebar"><div class="logo">CampusWorkspace</div><div>Assignment Core</div></div>
+        <div class="main"><div class="card"><h3>Active Session: ${mask.toUpperCase() || 'AWAITING INITIALIZATION'}</h3></div>
+        <div class="card"><h3>Research Engine Tunnel</h3><input type="text" id="inp" placeholder="Enter target site..."><button id="sBtn">Execute Pipeline</button></div>
+        <div class="card"><h3>Mirror Link Cloner</h3><button class="clone-btn" id="cBtn">Clone Proxy URL</button><div id="box"></div></div></div></div>
+        <script>
+            const p = new URLSearchParams(window.location.search); let m = p.get('assignment') || '';
+            if(!m){ m = 'workbook-' + Math.floor(1000+Math.random()*9000); window.history.replaceState({},'','/?assignment='+m); window.location.reload(); }
+            document.getElementById('sBtn').onclick=function(){
+                let t=document.getElementById('inp').value.trim(); if(!t)return;
+                if(!t.includes('.')) t='https://wikipedia.org;
+                else if(!/^https?:\\/\\//i.test(t)) t='https://'+t;
+                document.getElementById('panel').style.display='block';
+                document.getElementById('proxyIframe').src='/gateway-tunnel?mask='+encodeURIComponent(m)+'&url='+encodeURIComponent(t);
+            };
+            document.getElementById('cBtn').onclick=function(){
+                const b=document.getElementById('box'); b.style.display="block";
+                const n=window.location.origin+'/?assignment=workbook-'+Math.floor(1000+Math.random()*9000);
+                b.innerHTML='<strong>Mirror Cloned:</strong><br><br><a href="'+n+'" target="_blank" style="color:#0070f3;text-decoration:none;">'+n+'</a>';
+            };
+        </script>
+    </body></html>`);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Full-Access Search Engine operating live on port ${PORT}`));
+app.listen(process.env.PORT || 10000);
